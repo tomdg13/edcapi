@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  kapi:
+    container_name: kapi
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SERVICE_NAME=${DB_SERVICE_NAME}
+    restart: always
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://10.153.46.32:3000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # command: npm run start:dev
+
+  # Production service
+  kapi_prod:
+    container_name: kapi_prod
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SERVICE_NAME=${DB_SERVICE_NAME}
+    restart: always
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://110.153.46.32:3000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
