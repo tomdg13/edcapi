@@ -13,6 +13,12 @@ import { GroupModule } from './group/group.module';
 // Add this import for the User entity
 import { User } from './user/user.entity';
 
+import { BranchModule } from './branch/branch.module';
+import { BranchEntity } from './branch/branch.entity';
+import { roleModule,  } from './role/role.module';
+import { roleEntity } from './role/role.entity';
+
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -25,12 +31,16 @@ import { User } from './user/user.entity';
       password: 'atmbk12123',
       connectString: '10.154.46.26:1521/ATMRPT',
       synchronize: false, // Set to false in production
-      entities: [User], // Add User entity here
+      entities: [User,BranchEntity,roleEntity], // Add User entity here
+      
     }),
     ScheduleModule.forRoot(),
     UserAuthModule,
     UserModule,
-    GroupModule
+    GroupModule,
+    
+    BranchModule,
+    roleModule
   ],
   controllers: [],
 })
