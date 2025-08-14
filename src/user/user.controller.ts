@@ -1,498 +1,343 @@
-// src/user/user.controller.ts - COMPLETE USER CONTROLLER FOR ED_USER WITH PHONE
 import {
   Controller,
   Get,
   Post,
-  Body,
-  Patch,
-  Param,
+  Put,
   Delete,
+  Body,
+  Param,
   Query,
-  HttpCode,
   HttpStatus,
-  ValidationPipe,
+  HttpCode,
   ParseIntPipe,
-  UsePipes,
+  ValidationPipe,
+  UseGuards,
+  SetMetadata,
+  Request,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { UserService } from './user.service';
+import {
+  CreateUserDto,
+  UpdateUserDto,
+  UserResponseDto,
+  SearchByPhoneDto,
+  UserStatus,
+} from './user.dto';
+import { User } from './user.entity';
 
-// DTOs for validation (you can create separate DTO files)
-import { 
-  IsEmail, 
-  IsNotEmpty, 
-  IsString, 
-  MinLength, 
-  MaxLength, 
-  IsOptional, 
-  IsIn,
-  IsNumber,
-  Min,
-  Max,
-  Matches
-} from 'class-validator';
-import { Transform, Type } from 'class-transformer';
-
-// DTO Classes for validation
-class CreateUserDto {
-  @IsNotEmpty()
-  @IsString()
-  @MaxLength(20)
-  @Matches(/^\+?[\d\s\-\(\)]{8,20}$/, { message: 'Invalid phone number format' })
-  phone: string;
-
-  @IsEmail()
-  @IsNotEmpty()
-  @MaxLength(255)
-  email: string;
-
-  @IsNotEmpty()
-  @IsString()
-  @MinLength(8)
-  password: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  first_name?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  last_name?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  role?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  language?: string;
-}
-
-class UpdateUserDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  @Matches(/^\+?[\d\s\-\(\)]{8,20}$/, { message: 'Invalid phone number format' })
-  phone?: string;
-
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(255)
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  first_name?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  last_name?: string;
-
-  @IsOptional()
-  @IsIn(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING'])
-  user_status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING';
-
-  @IsOptional()
-  @IsIn(['Y', 'N'])
-  is_email_verified?: 'Y' | 'N';
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  role?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  language?: string;
-}
-
-class UserQueryDto {
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  page?: number = 1;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  @Max(100)
-  limit?: number = 10;
-
-  @IsOptional()
-  @IsIn(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING'])
-  status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING';
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  search?: string;
-
-  @IsOptional()
-  @IsIn(['USER_ID', 'PHONE', 'EMAIL', 'FIRST_NAME', 'LAST_NAME', 'CREATED_DATE', 'LAST_LOGIN_DATE'])
-  sortBy?: string;
-
-  @IsOptional()
-  @IsIn(['ASC', 'DESC'])
-  sortOrder?: 'ASC' | 'DESC';
-}
-
-class LockAccountDto {
-  @IsOptional()
-  @Transform(({ value }) => new Date(value))
-  lock_until?: Date;
-}
-
-class BulkActionDto {
-  @IsNotEmpty()
-  @IsNumber({}, { each: true })
-  user_ids: number[];
-
-  @IsNotEmpty()
-  @IsIn(['activate', 'deactivate', 'suspend', 'lock', 'unlock'])
-  action: 'activate' | 'deactivate' | 'suspend' | 'lock' | 'unlock';
-}
+// Create a decorator to bypass JWT authentication for specific endpoints
+export const Public = () => SetMetadata('isPublic', true);
 
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  // GET /users - Get all users with filtering and pagination
-  @Get()
-  @HttpCode(HttpStatus.OK)
-  @UsePipes(new ValidationPipe({ transform: true }))
-  async findAll(@Query() query: UserQueryDto) {
-    try {
-      return await this.userService.findAll(query);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // GET /users/stats - Get user statistics
-  @Get('stats')
-  @HttpCode(HttpStatus.OK)
-  async getStats() {
-    try {
-      return await this.userService.getStats();
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // GET /users/search/:identifier - Find user by phone or email
-  @Get('search/:identifier')
-  @HttpCode(HttpStatus.OK)
-  async findByIdentifier(@Param('identifier') identifier: string) {
-    try {
-      return await this.userService.findByPhoneOrEmail(identifier);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // GET /users/by-status/:status - Get users by status
-  @Get('by-status/:status')
-  @HttpCode(HttpStatus.OK)
-  @UsePipes(new ValidationPipe({ transform: true }))
-  async findByStatus(
-    @Param('status') status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING',
-    @Query() query: Omit<UserQueryDto, 'status'>
-  ) {
-    try {
-      return await this.userService.findAll({ ...query, status });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // GET /users/:id - Get user by ID
-  @Get(':id')
-  @HttpCode(HttpStatus.OK)
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.findOne(id);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // POST /users - Create new user
+  /**
+   * Create a new user
+   */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new ValidationPipe())
-  async create(@Body() createUserDto: CreateUserDto) {
-    try {
-      return await this.userService.create(createUserDto);
-    } catch (error) {
-      throw error;
+  // @Public() // Uncomment if you want to allow user registration without authentication
+  async create(
+    @Body(new ValidationPipe()) createUserDto: CreateUserDto,
+    @Request() req?: any, // JWT user info from your auth system
+  ): Promise<User> {
+    // Set createdBy from JWT token if available
+    if (req?.user?.username || req?.user?.userId) {
+      createUserDto.createdBy = req.user.username || req.user.userId.toString();
+      createUserDto.modifiedBy = req.user.username || req.user.userId.toString();
     }
+    
+    return await this.userService.create(createUserDto);
   }
 
-  // POST /users/bulk-action - Bulk operations on multiple users
-  @Post('bulk-action')
-  @HttpCode(HttpStatus.OK)
-  @UsePipes(new ValidationPipe())
-  async bulkAction(@Body() bulkActionDto: BulkActionDto) {
-    try {
-      const results = [];
-      
-      for (const userId of bulkActionDto.user_ids) {
-        try {
-          let result;
-          switch (bulkActionDto.action) {
-            case 'activate':
-              result = await this.userService.update(userId, { user_status: 'ACTIVE' });
-              break;
-            case 'deactivate':
-              result = await this.userService.delete(userId);
-              break;
-            case 'suspend':
-              result = await this.userService.update(userId, { user_status: 'SUSPENDED' });
-              break;
-            case 'lock':
-              result = await this.userService.lockAccount(userId);
-              break;
-            case 'unlock':
-              result = await this.userService.unlockAccount(userId);
-              break;
-            default:
-              throw new Error('Invalid action');
-          }
-          
-          results.push({
-            user_id: userId,
-            status: 'success',
-            result: result
-          });
-        } catch (error) {
-          results.push({
-            user_id: userId,
-            status: 'error',
-            error: error.message
-          });
-        }
-      }
-
-      return {
-        status: 'success',
-        message: `Bulk ${bulkActionDto.action} operation completed`,
-        data: {
-          action: bulkActionDto.action,
-          results: results,
-          summary: {
-            total: bulkActionDto.user_ids.length,
-            successful: results.filter(r => r.status === 'success').length,
-            failed: results.filter(r => r.status === 'error').length
-          }
-        }
-      };
-    } catch (error) {
-      throw error;
+  /**
+   * Get all users with optional filtering and pagination
+   */
+  @Get()
+  async findAll(
+    @Query('status') status?: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+    @Query('paginate') paginate?: string,
+  ): Promise<User[] | { users: User[]; total: number; totalPages: number }> {
+    // If pagination is requested
+    if (paginate === 'true') {
+      return await this.userService.findWithPagination(page, limit, status);
     }
+    
+    // Regular filtering
+    if (status) {
+      return await this.userService.findByStatus(status);
+    }
+    
+    return await this.userService.findAll();
   }
 
-  // PATCH /users/:id - Update user
-  @Patch(':id')
+  /**
+   * Get user by ID
+   */
+  @Get(':id')
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<User> {
+    return await this.userService.findOne(id);
+  }
+
+  /**
+   * Search user by phone number (GET method)
+   */
+  @Get('search/phone')
+  async findByPhone(@Query('phone') phone: string): Promise<User> {
+    if (!phone) {
+      throw new Error('Phone number is required');
+    }
+    return await this.userService.findByPhone(phone);
+  }
+
+  /**
+   * Search user by phone number (POST method with body payload)
+   */
+  @Post('search/phone')
   @HttpCode(HttpStatus.OK)
-  @UsePipes(new ValidationPipe())
+  async searchByPhone(
+    @Body(new ValidationPipe()) searchDto: SearchByPhoneDto,
+  ): Promise<User> {
+    return await this.userService.findByPhone(searchDto.phone);
+  }
+
+  /**
+   * Search user by email
+   */
+  @Get('search/email')
+  async findByEmail(@Query('email') email: string): Promise<User> {
+    if (!email) {
+      throw new Error('Email is required');
+    }
+    const user = await this.userService.findByEmail(email);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return user;
+  }
+
+  /**
+   * Search user by user code
+   */
+  @Get('search/code')
+  async findByUserCode(@Query('userCode') userCode: string): Promise<User> {
+    if (!userCode) {
+      throw new Error('User code is required');
+    }
+    const user = await this.userService.findByUserCode(userCode);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return user;
+  }
+
+  /**
+   * Update user
+   */
+  @Put(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateUserDto: UpdateUserDto,
-  ) {
-    try {
-      return await this.userService.update(id, updateUserDto);
-    } catch (error) {
-      throw error;
+    @Body(new ValidationPipe()) updateUserDto: UpdateUserDto,
+    @Request() req?: any, // JWT user info
+  ): Promise<User> {
+    // Set modifiedBy from JWT token if available
+    if (req?.user?.username || req?.user?.userId) {
+      updateUserDto.modifiedBy = req.user.username || req.user.userId.toString();
     }
+    
+    return await this.userService.update(id, updateUserDto);
   }
 
-  // PATCH /users/:id/activate - Activate user
-  @Patch(':id/activate')
-  @HttpCode(HttpStatus.OK)
-  async activateUser(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.update(id, { user_status: 'ACTIVE' });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // PATCH /users/:id/deactivate - Deactivate user
-  @Patch(':id/deactivate') 
-  @HttpCode(HttpStatus.OK)
-  async deactivateUser(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.delete(id);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // PATCH /users/:id/suspend - Suspend user
-  @Patch(':id/suspend')
-  @HttpCode(HttpStatus.OK)
-  async suspendUser(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.update(id, { user_status: 'SUSPENDED' });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // PATCH /users/:id/lock - Lock user account
-  @Patch(':id/lock')
-  @HttpCode(HttpStatus.OK)
-  @UsePipes(new ValidationPipe())
-  async lockAccount(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() lockDto: LockAccountDto,
-  ) {
-    try {
-      return await this.userService.lockAccount(id, lockDto.lock_until);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // PATCH /users/:id/unlock - Unlock user account
-  @Patch(':id/unlock')
-  @HttpCode(HttpStatus.OK)
-  async unlockAccount(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.unlockAccount(id);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // POST /users/:id/verify-email - Manually verify user email
-  @Post(':id/verify-email')
-  @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.update(id, { is_email_verified: 'Y' });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // POST /users/:id/unverify-email - Unverify user email
-  @Post(':id/unverify-email')
-  @HttpCode(HttpStatus.OK)
-  async unverifyEmail(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.update(id, { is_email_verified: 'N' });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // DELETE /users/:id - Soft delete user (same as deactivate)
+  /**
+   * Soft delete user (set status to INACTIVE)
+   */
   @Delete(':id')
-  @HttpCode(HttpStatus.OK)
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    try {
-      return await this.userService.delete(id);
-    } catch (error) {
-      throw error;
-    }
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return await this.userService.remove(id);
   }
 
-  // GET /users/:id/profile - Get user profile information
-  @Get(':id/profile')
-  @HttpCode(HttpStatus.OK)
-  async getUserProfile(@Param('id', ParseIntPipe) id: number) {
-    try {
-      const userResult = await this.userService.findOne(id);
-      
-      // Return limited profile information
-      const user = userResult.data;
-      return {
-        status: 'success',
-        message: 'User profile retrieved successfully',
-        data: {
-          user_id: user.user_id,
-          phone: user.phone,
-          email: user.email,
-          full_name: user.full_name,
-          user_status: user.user_status,
-          is_email_verified: user.is_email_verified,
-          created_date: user.created_date,
-          last_login_date: user.last_login_date,
-          role: user.role,
-          language: user.language
-        }
-      };
-    } catch (error) {
-      throw error;
-    }
+  /**
+   * Hard delete user (completely remove from database)
+   */
+  @Delete(':id/hard')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async hardDelete(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return await this.userService.hardDelete(id);
   }
 
-  // GET /users/:id/login-history - Get basic user login information
-  @Get(':id/login-history')
+  /**
+   * Update user's last login date
+   */
+  @Post(':id/login')
   @HttpCode(HttpStatus.OK)
-  async getLoginHistory(@Param('id', ParseIntPipe) id: number) {
-    try {
-      const userResult = await this.userService.findOne(id);
-      const user = userResult.data;
-      
-      return {
-        status: 'success',
-        message: 'User login history retrieved successfully',
-        data: {
-          user_id: id,
-          phone: user.phone,
-          last_login_date: user.last_login_date,
-          failed_login_attempts: user.failed_login_attempts,
-          is_account_locked: user.is_account_locked,
-          account_locked_until: user.account_locked_until,
-          user_status: user.user_status
-        }
-      };
-    } catch (error) {
-      throw error;
-    }
+  async updateLastLogin(@Param('id', ParseIntPipe) id: number): Promise<{ message: string }> {
+    await this.userService.updateLastLogin(id);
+    return { message: 'Last login updated successfully' };
   }
 
-  // POST /users/export - Export users data information
-  @Post('export')
+  /**
+   * Get user statistics
+   */
+  @Get('stats/count')
+  async getUserStats(): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+    suspended: number;
+    pending: number;
+  }> {
+    const [total, active, inactive, suspended, pending] = await Promise.all([
+      this.userService.countUsers(),
+      this.userService.countUsersByStatus(UserStatus.ACTIVE),
+      this.userService.countUsersByStatus(UserStatus.INACTIVE),
+      this.userService.countUsersByStatus(UserStatus.SUSPENDED),
+      this.userService.countUsersByStatus(UserStatus.PENDING),
+    ]);
+
+    return {
+      total,
+      active,
+      inactive,
+      suspended,
+      pending,
+    };
+  }
+
+  /**
+   * Verify user password (for authentication purposes)
+   */
+  @Post('verify-password')
   @HttpCode(HttpStatus.OK)
-  @UsePipes(new ValidationPipe({ transform: true }))
-  async exportUsers(
-    @Body() exportDto: { 
-      format?: 'csv' | 'excel' | 'json'; 
-      filters?: UserQueryDto 
+  async verifyPassword(
+    @Body() body: { email: string; password: string },
+  ): Promise<{ valid: boolean; user?: User }> {
+    const user = await this.userService.findByEmail(body.email);
+    
+    if (!user) {
+      return { valid: false };
     }
-  ) {
-    try {
-      const users = await this.userService.findAll(exportDto.filters || {});
-      
-      return {
-        status: 'success',
-        message: 'Export data prepared successfully',
-        data: {
-          format: exportDto.format || 'json',
-          total_records: users.data.length,
-          users: users.data,
-          pagination: users.pagination,
-          // In real implementation, you'd generate the actual file
-          export_info: {
-            generated_at: new Date().toISOString(),
-            total_users: users.data.length,
-            format: exportDto.format || 'json'
-          }
-        }
-      };
-    } catch (error) {
-      throw error;
+
+    const isValid = await this.userService.verifyPassword(body.password, user.passwordHash);
+    
+    if (isValid) {
+      // Remove password hash from response
+      const { passwordHash, ...userWithoutPassword } = user;
+      return { valid: true, user: userWithoutPassword as User };
     }
+
+    return { valid: false };
+  }
+
+  /**
+   * Change user password
+   */
+  @Put(':id/password')
+  async changePassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { currentPassword: string; newPassword: string },
+    @Request() req?: any,
+  ): Promise<{ message: string }> {
+    // Get user with password hash
+    const user = await this.userService.findByEmail(
+      (await this.userService.findOne(id)).email
+    );
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await this.userService.verifyPassword(
+      body.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    // Update with new password
+    const updateDto: UpdateUserDto = {
+      password: body.newPassword,
+    };
+
+    if (req?.user?.username || req?.user?.userId) {
+      updateDto.modifiedBy = req.user.username || req.user.userId.toString();
+    }
+
+    await this.userService.update(id, updateDto);
+
+    return { message: 'Password updated successfully' };
+  }
+
+  /**
+   * Activate user
+   */
+  @Put(':id/activate')
+  async activateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req?: any,
+  ): Promise<User> {
+    const updateDto: UpdateUserDto = {
+      userStatus: UserStatus.ACTIVE,
+    };
+
+    if (req?.user?.username || req?.user?.userId) {
+      updateDto.modifiedBy = req.user.username || req.user.userId.toString();
+    }
+
+    return await this.userService.update(id, updateDto);
+  }
+
+  /**
+   * Suspend user
+   */
+  @Put(':id/suspend')
+  async suspendUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req?: any,
+  ): Promise<User> {
+    const updateDto: UpdateUserDto = {
+      userStatus: UserStatus.SUSPENDED,
+    };
+
+    if (req?.user?.username || req?.user?.userId) {
+      updateDto.modifiedBy = req.user.username || req.user.userId.toString();
+    }
+
+    return await this.userService.update(id, updateDto);
+  }
+
+  /**
+   * Get users by role ID
+   */
+  @Get('role/:roleId')
+  async getUsersByRole(
+    @Param('roleId', ParseIntPipe) roleId: number,
+  ): Promise<User[]> {
+    // This would require adding a method to the service
+    // For now, we'll use findAll and filter (not optimal for large datasets)
+    const allUsers = await this.userService.findAll();
+    return allUsers.filter(user => user.roleId === roleId);
+  }
+
+  /**
+   * Get users by branch ID
+   */
+  @Get('branch/:branchId')
+  async getUsersByBranch(
+    @Param('branchId', ParseIntPipe) branchId: number,
+  ): Promise<User[]> {
+    // This would require adding a method to the service
+    // For now, we'll use findAll and filter (not optimal for large datasets)
+    const allUsers = await this.userService.findAll();
+    return allUsers.filter(user => user.branchId === branchId);
   }
 }

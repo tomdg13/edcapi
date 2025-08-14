@@ -1,17 +1,18 @@
-// src/user/user.module.ts - COMPLETE USER MODULE FOR ED_USER SYSTEM
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserService } from './user.service';
 import { UserController } from './user.controller';
+import { UserService } from './user.service';
+import { User } from './user.entity';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([User]), // Register the User entity
   ],
   controllers: [UserController],
   providers: [UserService],
   exports: [
-    UserService, 
+    UserService, // Export service so other modules can use it
+    TypeOrmModule, // Export TypeOrmModule if needed by other modules
   ],
 })
 export class UserModule {}
-

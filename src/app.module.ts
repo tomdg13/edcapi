@@ -10,14 +10,14 @@ import { UserAuthModule } from './auth/auth.module';
 import { JwtMiddleware } from './auth/middleware/jwt.middleware';
 import { UserModule } from './user/user.module';
 import { GroupModule } from './group/group.module';
-
+// Add this import for the User entity
+import { User } from './user/user.entity';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-
     TypeOrmModule.forRoot({
       type: 'oracle',
       poolSize: 1,
@@ -25,11 +25,12 @@ import { GroupModule } from './group/group.module';
       password: 'atmbk12123',
       connectString: '10.154.46.26:1521/ATMRPT',
       synchronize: false, // Set to false in production
-      entities: [],
+      entities: [User], // Add User entity here
     }),
     ScheduleModule.forRoot(),
     UserAuthModule,
-    UserModule,GroupModule
+    UserModule,
+    GroupModule
   ],
   controllers: [],
 })

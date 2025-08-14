@@ -1,54 +1,55 @@
 import {
   Injectable,
+  CanActivate,
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
-import { Observable } from 'rxjs';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {
+export class JwtAuthGuard implements CanActivate {
   constructor(
-    private reflector: Reflector,
-    private jwtService?: JwtService,
-    private configService?: ConfigService,
-  ) {
-    super();
-  }
+    private readonly reflector: Reflector,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
-    // Check for public route metadata (optional - if you want to mark some routes as public)
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Check if the route is marked as public
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
       context.getClass(),
     ]);
 
     if (isPublic) {
-      return true;
+      return true; // Allow access to public routes
     }
 
-    // Use the parent AuthGuard's canActivate method
-    return super.canActivate(context);
+    const request = context.switchToHttp().getRequest();
+    const token = this.extractTokenFromHeader(request);
+
+    if (!token) {
+      throw new UnauthorizedException('Token not provided');
+    }
+
+    try {
+      const secret = this.configService.get<string>('JWT_SECRET') || 'your-secret-key';
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: secret,
+      });
+
+      // Attach the user payload to the request object
+      request.user = payload;
+      return true;
+    } catch (error) {
+      throw new UnauthorizedException('Invalid token');
+    }
   }
 
-  handleRequest(err: any, user: any, info: any) {
-    // Custom error handling
-    if (err || !user) {
-      // You can customize the error message based on the error type
-      if (info && info.name === 'TokenExpiredError') {
-        throw new UnauthorizedException('Token expired');
-      } else if (info && info.name === 'JsonWebTokenError') {
-        throw new UnauthorizedException('Invalid token');
-      }
-
-      throw new UnauthorizedException('Unauthorized access');
-    }
-
-    return user;
+  private extractTokenFromHeader(request: any): string | undefined {
+    const [type, token] = request.headers.authorization?.split(' ') ?? [];
+    return type === 'Bearer' ? token : undefined;
   }
 }
